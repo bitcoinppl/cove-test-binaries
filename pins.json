@@ -1,0 +1,14 @@
+{
+  "electrs": {
+    "repository": "https://github.com/Blockstream/electrs",
+    "rev": "7a7ac739e417cd055dda4f7653ded590ed5af3b8",
+    "version": "0.4.1"
+  },
+  "bitcoin_core": {
+    "version": "32.1",
+    "sha256": {
+      "x86_64-unknown-linux-gnu": "61545c17c3120fb7412f896d248b11993af04ec8817aad3649c55b2afb044963",
+      "aarch64-apple-darwin": "cd3dcdacb4ff861e862b2d7df4786ecef66472e2468dca1673a70dd761e064e7"
+    }
+  }
+}

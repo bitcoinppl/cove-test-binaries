@@ -1,0 +1,103 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uvx --python 3.13 mypy@2.4.0
+
+  electrs:
+    name: electrs (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-26
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      # the electrs checkout and its target dir, so an unchanged pin rebuilds incrementally
+      - uses: actions/cache@v6
+        with:
+          path: .work/electrs
+          key: electrs-${{ matrix.target }}-${{ hashFiles('pins.json') }}
+          restore-keys: electrs-${{ matrix.target }}-
+
+      - uses: actions/cache@v6
+        with:
+          path: .work/cache
+          key: bitcoin-core-${{ matrix.target }}-${{ hashFiles('pins.json') }}
+
+      - name: Build
+        run: uv run --python 3.13 scripts/build_electrs.py --target ${{ matrix.target }}
+
+      - name: Smoke test
+        run: >-
+          uv run --python 3.13 scripts/smoke_test.py
+          --target ${{ matrix.target }}
+          --electrs .work/electrs/target/release/electrs
+          --report dist/smoke-${{ matrix.target }}.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: electrs-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: [typecheck, electrs]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - id: assemble
+        run: uv run --python 3.13 scripts/release.py
+
+      # a release is immutable once published: the tag names only the electrs pin, so an unchanged
+      # electrs pin skips, including a change to the Core pin alone, and a changed one gets a new tag
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.assemble.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG is already released"
+            exit 0
+          fi
+          gh release create "$TAG" dist/*.tar.gz dist/SHA256SUMS \
+            --title "$TAG" --notes-file dist/RELEASE_NOTES.md --target "$GITHUB_SHA"

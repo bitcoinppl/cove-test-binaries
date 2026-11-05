@@ -1,0 +1,10 @@
+[project]
+name = "cove-test-binaries"
+version = "0.0.0"
+description = "Build, smoke-test and release scripts for Cove's test binaries"
+requires-python = ">=3.12"
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["scripts"]
