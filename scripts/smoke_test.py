@@ -105,6 +105,10 @@ def fetch_bitcoind(core: pins.CorePin, target: str, cache: Path) -> Path:
 
 
 def print_log_tail(name: str, path: Path) -> None:
+    if not path.exists():
+        print(f"--- no {name} log at {path} ---", flush=True)
+        return
+
     print(f"--- {name} log (last 40 lines) ---")
     print("\n".join(path.read_text().splitlines()[-40:]), flush=True)
 
@@ -146,7 +150,10 @@ class Bitcoind:
             wait_for("bitcoind RPC", lambda: self.call("getblockchaininfo"))
         except BaseException:
             self.stop()
-            print_log_tail("bitcoind", self.log_path)
+            # stdout catches argument errors and crashes, debug.log the startup itself, since
+            # -printtoconsole=0 keeps Core's log out of stdout
+            print_log_tail("bitcoind output", self.log_path)
+            print_log_tail("bitcoind debug", datadir / "signet" / "debug.log")
             raise
 
     @property
