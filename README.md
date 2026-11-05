@@ -27,7 +27,7 @@ The `Build` workflow runs on pull requests, on pushes to `master` and by hand. F
    - the confirmation.
 3. **`scripts/release.py`** runs only on `master`. It checks every target's archive and smoke report, then writes `SHA256SUMS` and the release notes. The workflow publishes them as release `electrs-v<version>-<rev>`, unless that tag already exists.
 
-To release a new electrs or Core version, change `pins.json` in a pull request. Merging it publishes the new tag. Published releases are never replaced.
+To release a new electrs version or revision, change `pins.json` in a pull request. Merging it publishes the new tag. The Core pin only sets which `bitcoind` the smoke test runs against, so changing it alone publishes nothing. Published releases are never replaced.
 
 The scripts are typed Python with no dependencies outside the standard library, checked with `mypy --strict`. Locally:
 

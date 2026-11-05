@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v10.3.3
       - run: uvx --python 3.13 mypy@2.4.0
 
@@ -35,6 +37,8 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v10.3.3
 
       # the electrs checkout and its target dir, so an unchanged pin rebuilds incrementally
@@ -73,6 +77,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v10.3.3
       - uses: actions/download-artifact@v8
         with:
@@ -82,7 +88,8 @@ jobs:
       - id: assemble
         run: uv run --python 3.13 scripts/release.py
 
-      # a release is immutable once published: an unchanged pin skips, and a changed one gets a new tag
+      # a release is immutable once published: the tag names only the electrs pin, so an unchanged
+      # electrs pin skips, including a change to the Core pin alone, and a changed one gets a new tag
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

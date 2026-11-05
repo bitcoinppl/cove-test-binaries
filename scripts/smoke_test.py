@@ -104,6 +104,11 @@ def fetch_bitcoind(core: pins.CorePin, target: str, cache: Path) -> Path:
     return bitcoind
 
 
+def print_log_tail(name: str, path: Path) -> None:
+    print(f"--- {name} log (last 40 lines) ---")
+    print("\n".join(path.read_text().splitlines()[-40:]), flush=True)
+
+
 class RpcError(Exception):
     pass
 
@@ -113,7 +118,8 @@ class Bitcoind:
         self.datadir = datadir
         datadir.mkdir(parents=True, exist_ok=True)
         self.port = free_port()
-        self.log = (datadir / "bitcoind.out").open("w")
+        self.log_path = datadir / "bitcoind.out"
+        self.log = self.log_path.open("w")
         self.process = subprocess.Popen(
             [
                 str(binary),
@@ -133,8 +139,15 @@ class Bitcoind:
         )
         # the custom challenge still uses the signet subdirectory on Core 32.1
         self.cookie_path = datadir / "signet" / ".cookie"
-        wait_for("the bitcoind cookie", lambda: self.cookie_path.exists() or None)
-        wait_for("bitcoind RPC", lambda: self.call("getblockchaininfo"))
+
+        # main() only holds the instance once this returns, so a failed start cleans up here
+        try:
+            wait_for("the bitcoind cookie", lambda: self.cookie_path.exists() or None)
+            wait_for("bitcoind RPC", lambda: self.call("getblockchaininfo"))
+        except BaseException:
+            self.stop()
+            print_log_tail("bitcoind", self.log_path)
+            raise
 
     @property
     def cookie(self) -> str:
@@ -203,7 +216,12 @@ class Electrs:
         # SIGUSR1 kills electrs until it installs its handler, which it has done by the
         # time its HTTP server answers, so pokes wait for that
         self.ready = False
-        wait_for("electrs to answer HTTP", lambda: self.esplora("/blocks/tip/hash"))
+        try:
+            wait_for("electrs to answer HTTP", lambda: self.esplora("/blocks/tip/hash"))
+        except BaseException:
+            self.stop()
+            print_log_tail("electrs", self.log_path)
+            raise
         self.ready = True
 
     def poke(self) -> None:
@@ -386,8 +404,7 @@ def main() -> None:
             if service is not None:
                 service.stop()
         if not succeeded and electrs is not None:
-            print("--- electrs log (last 40 lines) ---")
-            print("\n".join(electrs.log_path.read_text().splitlines()[-40:]))
+            print_log_tail("electrs", electrs.log_path)
         if succeeded or not os.environ.get("CI"):
             shutil.rmtree(workdir, ignore_errors=True)
 
